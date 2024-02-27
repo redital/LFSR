@@ -15,7 +15,27 @@ def performance_timer(func):
         return data
     return wrapper
 
-@performance_timer
+def batteria_di_test(func, n_test):
+    def wrapper(*args, **kwargs):
+        ns = [100_000_000 + 80000*i for i in range (n_test)]
+        times = {}
+        l=20
+        for n in ns:
+            perc = len(times)/((n_test)-1)
+            p = int((len(times)/((n_test)-1))*20)
+            print("[" + "="*p + " "*(l-p) +"]", "{:.2f}%".format(perc*100),sep="\t", end="\r")
+
+            start = time.perf_counter()
+            args = list(args)
+            args[1] = n
+            func(*args, **kwargs)
+            end = time.perf_counter()
+            times[n] = end-start
+        print()
+        return times
+    return wrapper
+
+#@performance_timer
 def plot_hist(data, bins = 15, title="", show = False, save = False):
     _ , grafico = plt.subplots()
     grafico.hist(x = data, 
@@ -69,7 +89,7 @@ def async_simulation(bit_number, n, state, subprocess_n, norm = False):
     if norm: data = [(i/(1<<bit_number)) for i in data]
     return data
 
-def multiprocess_simulation(bit_number, n, state, subprocess_n, norm = False):
+def multiprocess_simulation(bit_number, n, state, subprocess_n = 16, norm = False):
     states = simulate(bit_number,subprocess_n,state)
     with Pool() as pool:
         data = pool.starmap(simulate,[(bit_number,int(n/len(states)),state) for state in states])
@@ -77,7 +97,7 @@ def multiprocess_simulation(bit_number, n, state, subprocess_n, norm = False):
     if norm: data = [(i/(1<<bit_number)) for i in data]
     return data
 
-def multithread_simulation(bit_number, n, state, subprocess_n, norm = False):
+def multithread_simulation(bit_number, n, state, subprocess_n = 16, norm = False):
     states = simulate(bit_number,subprocess_n,state)
     with concurrent.futures.ThreadPoolExecutor(max_workers=subprocess_n) as executor:
         data = executor.map(simulate,[bit_number for _ in states],[int(n/len(states)) for _ in states],states)
@@ -85,7 +105,6 @@ def multithread_simulation(bit_number, n, state, subprocess_n, norm = False):
     if norm: data = [(i/(1<<bit_number)) for i in data]
     return data
 
-@performance_timer
 def simulate_norm_exp(bit_number,n,initial_state,v=1,m=0, bar= False, l = 20):
     gen = simulate_gen(bit_number, initial_state)
     exponential = []
@@ -113,13 +132,22 @@ def simulate_norm_exp(bit_number,n,initial_state,v=1,m=0, bar= False, l = 20):
     if bar: print()
     return normal, exponential
 
+@performance_timer
+def multiprocess_norm_exp_simulation(bit_number, n, state, subprocess_n, norm = False,v=1,m=0, bar= False, l = 20):
+    states = simulate(bit_number,subprocess_n,state)
+    with Pool() as pool:
+        data =  pool.starmap(simulate_norm_exp,[(bit_number,int(n/len(states)),state,v,m, bar, l) for state in states])
+        normal, exponential =  [i for t in data for i in t[0]],[i for t in data for i in t[1]]
+    if norm: data = [(i/(1<<bit_number)) for i in data]
+    return normal, exponential
+
 #   C'è un problema riguardante i processi con sottoprocessi, ogni sottoprocesso allo stato attuale è uguale al precedente ma solo shiftato in avanti di 1
 if __name__ == "__main__":
     #   Costanti
     plot = False
     bit_number = 16
     state = 1<<(bit_number-1) | 1
-    n = 1<<25
+    n = 1<<22
     subprocess_n = 16
 
     print("Generating data, I want {} samples".format(n))
@@ -145,7 +173,7 @@ if __name__ == "__main__":
     if plot : plot_hist(data,title="Multithreading")
     
     #   Sfrutto i dati simulati (che vengono da una normale) per simulare una distribuzione normale ed una esponenziale
-    normal,exponential = simulate_norm_exp(bit_number,n,state)
+    normal,exponential = multiprocess_norm_exp_simulation(bit_number,n,state,subprocess_n)
     if plot : plot_hist(normal)
     if plot : plot_hist(exponential)
 
