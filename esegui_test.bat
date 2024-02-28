@@ -1,0 +1,1 @@
+cmd /k "venv\Scripts\activate & python batteria_di_test.py & exit"

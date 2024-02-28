@@ -13,7 +13,7 @@ if __name__ == "__main__":
     bit_number = 16
     state = 1<<(bit_number-1) | 1
     n = 1<<22
-    subprocess_n = 8
+    subprocess_n = 16
 
     n_test = 150
 
@@ -58,6 +58,10 @@ if __name__ == "__main__":
     print(ea)
 
     plt.figure()
+    plt.plot(x_a, a, x_a, [i*ea + a[0] for i in x_a])
+    plt.figure()
+    x_a = [2**x for x in x_a]
+    ea=(a[-1]-a[0])/16
     plt.plot(x_a, a, x_a, [i*ea + a[0] for i in x_a])
 
     plt.figure()
@@ -105,8 +109,10 @@ if __name__ == "__main__":
     scale = numpy.mean(scale)
     print(m[0],s[0],m[0]-s[0])
     scaled_x = [i*scale for i in x]
-    expected = [m[0] + (i)*(ea * numpy.log2(subprocess_n)/subprocess_n) for i in scaled_x]
-    expected_fixed = [m[0] + (i)*(1.55 * numpy.log2(subprocess_n)/subprocess_n) for i in scaled_x]
+    expected = [m[0] + (i)*(ea + (a[0]/subprocess_n)) for i in scaled_x]
+    expected_fixed = [m[0] + (i)*(0.95 + (a[0]/subprocess_n)) for i in scaled_x]
+    #0.95 per pc fisso
+    #1.55 per pc lavoro
     plt.figure()
     plt.plot(x,s,x,m)
     plt.plot(x,scaled_x, ".", x,expected, ".")
