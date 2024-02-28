@@ -17,7 +17,7 @@ def performance_timer(func):
 
 def batteria_di_test(func, n_test):
     def wrapper(*args, **kwargs):
-        ns = [100_000_000 + 80000*i for i in range (n_test)]
+        ns = [1_000_000 + 80000*i for i in range (n_test)]
         times = {}
         l=20
         for n in ns:
