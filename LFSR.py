@@ -24,7 +24,7 @@ def batteria_di_test(func, n_test, initial_n = 1_000_000, delta_n = 80_000):
         l=20
         for n in ns:
             perc = processed_n/total_n
-            p = int(perc)*l
+            p = int(perc*l)
             print("[" + "="*p + " "*(l-p) +"]", "{:.2f}%".format(perc*100),sep="\t", end="\r")
 
             start = time.perf_counter()
@@ -34,8 +34,8 @@ def batteria_di_test(func, n_test, initial_n = 1_000_000, delta_n = 80_000):
             end = time.perf_counter()
             times[n] = end-start
             processed_n += n
-        perc = processed_n/total_n
-        p = int(perc)*l
+        perc = 1.0
+        p = int(perc*l)
         print("[" + "="*p + " "*(l-p) +"]", "{:.2f}%".format(perc*100),sep="\t")
         return times
     return wrapper
