@@ -15,14 +15,16 @@ def performance_timer(func):
         return data
     return wrapper
 
-def batteria_di_test(func, n_test):
+def batteria_di_test(func, n_test, initial_n = 1_000_000, delta_n = 80_000):
     def wrapper(*args, **kwargs):
-        ns = [1_000_000 + 80000*i for i in range (n_test)]
+        total_n = int(n_test*initial_n + delta_n*((n_test*(n_test+1))/2))
+        processed_n = 0
+        ns = [initial_n + delta_n*i for i in range (n_test)]
         times = {}
         l=20
         for n in ns:
-            perc = len(times)/((n_test)-1)
-            p = int((len(times)/((n_test)-1))*20)
+            perc = processed_n/total_n
+            p = int(perc)*l
             print("[" + "="*p + " "*(l-p) +"]", "{:.2f}%".format(perc*100),sep="\t", end="\r")
 
             start = time.perf_counter()
@@ -31,7 +33,9 @@ def batteria_di_test(func, n_test):
             func(*args, **kwargs)
             end = time.perf_counter()
             times[n] = end-start
-        print()
+        perc = processed_n/total_n
+        p = int(perc)*l
+        print("[" + "="*p + " "*(l-p) +"]", "{:.2f}%".format(perc*100),sep="\t")
         return times
     return wrapper
 

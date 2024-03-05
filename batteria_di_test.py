@@ -1,98 +1,106 @@
 from LFSR import *
 import matplotlib.pyplot as plt
 import numpy
-from multiprocessing.pool import Pool
 import multiprocessing.pool
 
 
 if __name__ == "__main__":
     print("CPU cores number:",multiprocessing.cpu_count())
+    
+    print("Costruzione del modello")
 
     #   Costanti
     plot = True
     bit_number = 16
     state = 1<<(bit_number-1) | 1
     n = 1<<22
-    subprocess_n = 16
+    subprocess_n = 8
 
-    n_test = 150
+    n_test = 30
 
-    #   Approccio multiprocess
-    f_under_test = batteria_di_test(multiprocess_simulation,n_test)
-    t1 = f_under_test(bit_number,n,state, 1)
-    t2 = f_under_test(bit_number,n,state, 2)
-    t4 = f_under_test(bit_number,n,state, 4)
-    t8 = f_under_test(bit_number,n,state, 8)
-    t16 = f_under_test(bit_number,n,state, 16)
+    keys = [2**i for i in range(4)]
+    t = {}
+
+    #   Fase 1: ESECUZIONE DEI TEST CON DIVERSI NUMERI DI PROCESSI AL FINE DI SCRIVERE IL MODELLO
     
-    x,y1 = list(t1.keys()), list(t1.values())
-    y2 = list(t2.values())
-    y4 = list(t4.values())
-    y8 = list(t8.values())
-    y16 = list(t16.values())
-    scale = [y1_i / x_i for y1_i,x_i in zip(y1,x)]
+    #   Faccio una simulazione in modalità sincrona solo per calcolare il fattore di scaling (da provare usando n_test piccolo) 
+    f_under_test = batteria_di_test(sync_simulation,10)
+    sync = f_under_test(bit_number,n,state)
+
+    #   Test al variare del numero di processi
+    f_under_test = batteria_di_test(multiprocess_simulation,n_test)
+    for k in keys:
+        t[k] = f_under_test(bit_number,n,state, k)
+    
+    #   Recupero x e y di ogni test per i plot 
+    x = list(t[keys[0]].keys())
+    y = {k:list(t[k].values()) for k in keys} 
+    sync = list(sync.values())
+    
+    #   Calcolo la costante di riscalamento
+    scale = [yi / x_i for yi,x_i in zip(sync,x)]
     scale = numpy.mean(scale)
 
-    scaled_x = [i/80000 for i in x]
+    #   Stima dei coefficienti angolari delle rette interpolanti i risultati dati dai test
+    e={}
+    for k in keys:
+        e[k] = [(y[k][i+1] - y[k][i])/(x[i+1] - x[i]) for i in range(len(y[k])-1)]
+        e[k] = numpy.mean(e[k])
 
-    e1 = [(y1[i] - y1[i+1])/(scaled_x[-1] - scaled_x[0]) for i in range(len(y1)-1)]
-    e1 = -numpy.mean(e1)
-    e2 = [(y2[i] - y2[i+1])/(scaled_x[-1] - scaled_x[0]) for i in range(len(y2)-1)]
-    e2 = -numpy.mean(e2)
-    e4 = [(y4[i] - y4[i+1])/(scaled_x[-1] - scaled_x[0]) for i in range(len(y4)-1)]
-    e4 = -numpy.mean(e4)
-    e8 = [(y8[i] - y8[i+1])/(scaled_x[-1] - scaled_x[0]) for i in range(len(y8)-1)]
-    e8 = -numpy.mean(e8)
-    e16 = [(y16[i] - y16[i+1])/(scaled_x[-1] - scaled_x[0]) for i in range(len(y16)-1)]
-    e16 = -numpy.mean(e16)
-    print(e1,e2,e4,e8,e16)
+    #   Primo plot in cui mostro la natura inversamente proporzionale del rapporto tra il numero di processi e il coefficiente angolare
+    plt.figure()
+    plt.title("e")
+    plt.plot(keys, list(e.values()))
 
-    l=[e1,e2,e4,e8,e16]
+    #   Calcolo a da cui dipende il coefficiente angolare e la sua versione alernativa alpha
     a = []
-    for i,p in zip(l,[1,2,4,8,16]):
-        a.append((i/l[0])*p)
-        print(a[-1])
+    alpha = []
+    for p,e_p in e.items():
+        alpha.append((e_p/e[keys[0]])*p)
+        a.append((e_p/scale)*p) 
     
-    x_a = list(range(5))
-    ea=(a[-1]-a[0])/4
-    print(ea)
+    #   Stima del coefficiente angolare della retta interpolante i valori di a trovati
+    x_a = keys
+    ea=(a[-1]-a[0])/(x_a[-1]-x_a[0])
+    ealpha=(alpha[-1]-alpha[0])/(x_a[-1]-x_a[0])
+    #   Stima del termine noto della retta interpolante i valori di a trovati
+    initial_a = [a[i]-(x_a[i]*ea) for i in range(len(x_a))]
+    initial_a = numpy.mean(initial_a)
+    initial_alpha = [alpha[i]-(x_a[i]*ealpha) for i in range(len(x_a))]
+    initial_alpha = numpy.mean(initial_alpha)
+    #   Plot di a e alpha calcolati vs relativa retta interpolante
+    plt.figure()
+    plt.title("alpha")
+    plt.plot(x_a, alpha, x_a, [i*ealpha + initial_alpha for i in x_a])
+    plt.legend(["actual", "expected"])
+    plt.figure()
+    plt.title("a")
+    plt.plot(x_a, a, x_a, [i*ea + initial_a for i in x_a])
+    plt.legend(["actual", "expected"])
+    plt.figure()
+    #   Plot di e vs relativa iperbole interpolante calcolata sia con a che con alpha
+    plt.title("e")
+    plt.plot(x_a, e.values(), x_a, [(i*ea + initial_a)*(scale/i) for i in x_a],x_a, [(i*ealpha + initial_alpha)*a[0]*(scale/i) for i in x_a])
+    plt.legend(["actual", "expected (a computed)", "expected (alpha computed)"])
 
+    #   Plot delle rilevazioni
     plt.figure()
-    plt.plot(x_a, a, x_a, [i*ea + a[0] for i in x_a])
-    plt.figure()
-    x_a = [2**x for x in x_a]
-    ea=(a[-1]-a[0])/16
-    plt.plot(x_a, a, x_a, [i*ea + a[0] for i in x_a])
-
-    plt.figure()
-    plt.plot(x,y1,x,y2,x,y4,x,y8,x,y16,)
-    plt.legend(['1','2','4','8','16'])
+    for k in keys:
+        plt.plot(x,y[k])
+    plt.legend([str(k) for k in keys])
     plt.ylabel('Tempo di esecuzione')
     plt.xlabel('Numero di campioni generati')
-    #plt.show()
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+    plt.show()
 
 
 
 
 
     
-    n_test = 100
+    #   Fase 2: ESECUZIONE DEI TEST AL FINE DI VALIDARE IL MODELLO
+    print("Validazione del modello")
+
+    n_test = 80
     
     #   Approccio sincrono
     f_under_test = batteria_di_test(sync_simulation,n_test)
@@ -107,12 +115,12 @@ if __name__ == "__main__":
     m = list(times_m.values())
     scale = [s_i / x_i for s_i,x_i in zip(s,x)]
     scale = numpy.mean(scale)
-    print(m[0],s[0],m[0]-s[0])
     scaled_x = [i*scale for i in x]
-    expected = [m[0] + (i)*(ea + (a[0]/subprocess_n)) for i in scaled_x]
-    expected_fixed = [m[0] + (i)*(0.95 + (a[0]/subprocess_n)) for i in scaled_x]
-    #0.95 per pc fisso
-    #1.55 per pc lavoro
+    initial_m = [m[i]-(scaled_x[i])*(ea + (initial_a/subprocess_n)) for i in range(len(scaled_x))]
+    initial_m = numpy.mean(initial_m)
+    expected = [initial_m + (i)*(ea + (initial_a/subprocess_n)) for i in scaled_x]
+    expected_alpha = [initial_m + i*a[0]*(ealpha + (initial_alpha/subprocess_n)) for i in scaled_x]
+
     plt.figure()
     plt.plot(x,s,x,m)
     plt.plot(x,scaled_x, ".", x,expected, ".")
@@ -124,7 +132,7 @@ if __name__ == "__main__":
     plt.figure()
     plt.plot(x,s,x,m)
     plt.plot(x,scaled_x, ".")
-    plt.plot(x,expected_fixed, ".")
+    plt.plot(x,expected_alpha, ".")
     plt.legend(['Synchronous', 'Multiprocess','Expected Synchronous', 'Expected Multiprocess'])
     plt.ylabel('Tempo di esecuzione')
     plt.xlabel('Numero di campioni generati')
